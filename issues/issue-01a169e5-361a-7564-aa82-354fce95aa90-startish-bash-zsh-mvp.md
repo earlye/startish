@@ -72,3 +72,11 @@ tested here.
 - Whether `wtclaude` should someday print or record the session id it just
   ran, so a caller can pass the exact `--resume <id>` to `--history` instead
   of a `SESSION_ID` placeholder. That work belongs in `wtclaude`, not here.
+
+## Grill Log
+
+### 2026-10-23
+
+- Q: Shell script or compiled binary? — A: Rust binary (`cargo install`), for
+  consistency with `wtclaude`'s ecosystem. A POSIX `sh` script was considered
+  and rejected despite being simpler to install.
