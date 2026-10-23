@@ -155,3 +155,55 @@ fn zsh_prompt_after_success() {
 fn zsh_prompt_after_failure() {
     lands_at_prompt(Shell::Zsh, "echo fail-$((1+2)); exit 3", "fail-3");
 }
+
+fn ctrl_z_suspends_and_fg_resumes(shell: Shell) {
+    let Some(path) = shell.path() else { return };
+    let home = shell.home();
+    let script = "echo started; sleep 2; echo resumed-$((1+1))";
+    let mut p = startish(&path, home.path(), &["--", "sh", "-c", script]);
+    p.exp_string("started").unwrap();
+    p.send_control('z').unwrap();
+    p.exp_string(PROMPT).unwrap();
+    p.send_line("jobs; echo jobs-$((3+3))").unwrap();
+    p.exp_string("echo started").unwrap();
+    p.exp_string("jobs-6").unwrap();
+    p.exp_string(PROMPT).unwrap();
+    p.send_line("fg").unwrap();
+    p.exp_string("resumed-2").unwrap();
+    p.exp_string(PROMPT).unwrap();
+    exit(p);
+}
+
+fn ctrl_c_returns_to_prompt(shell: Shell) {
+    let Some(path) = shell.path() else { return };
+    let home = shell.home();
+    let script = "echo started; sleep 30; echo finished";
+    let mut p = startish(&path, home.path(), &["--", "sh", "-c", script]);
+    p.exp_string("started").unwrap();
+    p.send_control('c').unwrap();
+    p.exp_string(PROMPT).unwrap();
+    p.send_line("echo alive-$((2+2))").unwrap();
+    let (before, _) = p.exp_regex("alive-4").unwrap();
+    assert!(!before.contains("finished"));
+    exit(p);
+}
+
+#[test]
+fn bash_ctrl_z_suspends_command() {
+    ctrl_z_suspends_and_fg_resumes(Shell::Bash);
+}
+
+#[test]
+fn zsh_ctrl_z_suspends_command() {
+    ctrl_z_suspends_and_fg_resumes(Shell::Zsh);
+}
+
+#[test]
+fn bash_ctrl_c_interrupts_command() {
+    ctrl_c_returns_to_prompt(Shell::Bash);
+}
+
+#[test]
+fn zsh_ctrl_c_interrupts_command() {
+    ctrl_c_returns_to_prompt(Shell::Zsh);
+}

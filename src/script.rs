@@ -53,8 +53,24 @@ impl Startup<'_> {
         for entry in self.entries() {
             writeln!(s, "history -s -- {}", quote(entry)).unwrap();
         }
-        writeln!(s, "{}", self.command).unwrap();
+        s.push_str(&self.bash_run_hook());
         s
+    }
+
+    fn bash_run_hook(&self) -> String {
+        let hook = format!(
+            "unset PROMPT_COMMAND; eval \"$__startish_saved\"; unset __startish_saved\n\
+             {}\n\
+             for __startish_c in ${{PROMPT_COMMAND[@]+\"${{PROMPT_COMMAND[@]}}\"}}; do eval \"$__startish_c\"; done\n\
+             unset __startish_c",
+            self.command
+        );
+        format!(
+            "__startish_saved=$(declare -p PROMPT_COMMAND 2>/dev/null)\n\
+             unset PROMPT_COMMAND\n\
+             PROMPT_COMMAND={}\n",
+            quote(&hook)
+        )
     }
 
     pub fn zshrc(&self, tmpdir: &str) -> String {
@@ -138,7 +154,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_rcfile_pushes_history_then_command_and_runs_it_last() {
+    fn bash_rcfile_pushes_history_then_installs_run_hook() {
         let history = words(&["echo one", "echo 'two'"]);
         let startup = Startup {
             history: &history,
@@ -146,15 +162,54 @@ mod tests {
         };
         let rc = startup.bash_rcfile("/tmp/startish-x.bash");
         assert!(rc.starts_with("command rm -f -- /tmp/startish-x.bash\n"));
-        assert!(rc.ends_with(
+        assert!(rc.contains(
             "history -r; fi\n\
              history -s -- 'echo one'\n\
              history -s -- 'echo '\\''two'\\'''\n\
-             history -s -- 'make test'\n\
-             make test\n"
+             history -s -- 'make test'\n"
         ));
+        assert!(rc.ends_with(&startup.bash_run_hook()));
         let profile = rc.find(". ~/.bash_profile").unwrap();
         assert!(profile < rc.find("history -r").unwrap());
+    }
+
+    fn run_bash_hook(setup: &str) -> String {
+        let startup = Startup {
+            history: &[],
+            command: "echo ran; (exit 4)",
+        };
+        let script = format!(
+            "{setup}\n{}eval \"$PROMPT_COMMAND\"\necho ---\n\
+             declare -p PROMPT_COMMAND 2>/dev/null\n\
+             compgen -v __startish; compgen -A function __startish; true",
+            startup.bash_run_hook()
+        );
+        let out = std::process::Command::new("bash")
+            .args(["-c", &script])
+            .output()
+            .unwrap();
+        String::from_utf8(out.stdout).unwrap()
+    }
+
+    #[test]
+    fn bash_hook_runs_command_then_restores_string_prompt_command() {
+        assert_eq!(
+            run_bash_hook("PROMPT_COMMAND='echo user-$?'"),
+            "ran\nuser-4\n---\ndeclare -- PROMPT_COMMAND=\"echo user-\\$?\"\n"
+        );
+    }
+
+    #[test]
+    fn bash_hook_restores_array_prompt_command() {
+        assert_eq!(
+            run_bash_hook("PROMPT_COMMAND=('echo a1' 'echo a2')"),
+            "ran\na1\na2\n---\ndeclare -a PROMPT_COMMAND=([0]=\"echo a1\" [1]=\"echo a2\")\n"
+        );
+    }
+
+    #[test]
+    fn bash_hook_leaves_prompt_command_unset() {
+        assert_eq!(run_bash_hook("unset PROMPT_COMMAND"), "ran\n---\n");
     }
 
     #[test]

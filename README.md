@@ -26,7 +26,8 @@ startish --history "wtclaude --no-pull --resume <id> <branch>" -- \
   COMMAND first, then the `--history` entries from last to first, then the
   shell's saved history.
 - When COMMAND exits, successfully or not, you are at a normal prompt with your
-  usual config loaded. Ctrl-C stops COMMAND and leaves you at the prompt.
+  usual config loaded. Ctrl-C stops COMMAND and leaves you at the prompt;
+  Ctrl-Z suspends it as a normal job that `fg` resumes.
 
 The shell is chosen from `$SHELL`. startish writes a startup file to a
 temporary location, `exec`s the shell, and the startup file deletes itself once
@@ -41,6 +42,14 @@ before `history -s`, because bash skips loading its history file if the
 history list is already non-empty when startup finishes. `/etc/profile` is not
 sourced.
 
+COMMAND runs from a run-once `PROMPT_COMMAND` hook rather than from the rcfile
+itself, because bash only turns on job control after its startup files: run
+from the rcfile, COMMAND shares the shell's process group and Ctrl-Z does
+nothing. The rcfile saves whatever `PROMPT_COMMAND` the user's config set
+(string or bash 5.1+ array, via `declare -p`), and the hook restores it, runs
+COMMAND, then runs the restored `PROMPT_COMMAND` once so the first prompt looks
+as usual (with `$?` set to COMMAND's status).
+
 ### zsh
 
 `zsh -i` with `ZDOTDIR` pointing at a temporary directory:
@@ -51,7 +60,8 @@ sourced.
 - its `.zshrc` deletes the temporary directory, restores the remembered
   `ZDOTDIR`, sources the real `.zprofile`, `.zshrc` and `.zlogin`, installs a
   run-once `precmd` hook that pushes the history entries with `print -s`, then
-  runs COMMAND.
+  runs COMMAND. Ctrl-Z works from `.zshrc`, so zsh does not need a hook for
+  COMMAND.
 
 History is pushed from `precmd` because zsh loads `$HISTFILE` after `.zshrc`,
 which would put the saved history after the pushed entries.
@@ -65,12 +75,3 @@ since the shell is not a login shell.
 
 startish warns that the command will not be in history, runs COMMAND as a
 child, then `exec`s `$SHELL` (or `/bin/sh` if `$SHELL` is unset).
-
-## Known behaviour
-
-COMMAND runs from the startup file, before the shell's job control is active.
-Under bash, Ctrl-Z during COMMAND does nothing: COMMAND runs in the shell's own
-process group, which the kernel treats as orphaned, so the stop signal is
-discarded. Under zsh, Ctrl-Z suspends COMMAND as a normal job. If that matters,
-the generator can move COMMAND into a run-once first-prompt hook (bash
-`PROMPT_COMMAND`, zsh `precmd`).

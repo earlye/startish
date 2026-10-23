@@ -74,6 +74,10 @@ tested here.
   anything else) misbehaves in real use, switch to a run-once first-prompt hook
   (bash `PROMPT_COMMAND`, zsh `precmd`), which runs after startup completes.
   Keep the generator structured so that switch is small.
+  - Outcome: under bash, Ctrl-Z did nothing when COMMAND ran from the rcfile,
+    so bash now runs COMMAND from a run-once `PROMPT_COMMAND` hook (restoring
+    the user's own `PROMPT_COMMAND`). zsh still runs COMMAND at the end of
+    `.zshrc`, where Ctrl-Z works.
 - **Tests:** pseudo-terminal integration tests (e.g. the `rexpect` crate) under
   bash and zsh covering history order (COMMAND first on up-arrow, then the
   `--history` entries) and landing at a prompt after both a succeeding and a
