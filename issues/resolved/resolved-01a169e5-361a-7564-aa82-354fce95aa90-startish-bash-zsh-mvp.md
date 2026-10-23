@@ -61,14 +61,43 @@ tested here.
   shell has read them.
 - **Unverified:** whether a full-screen program (`claude`) started from inside
   an rcfile or `.zshrc` gets the terminal properly, including job control,
-  Ctrl-C and Ctrl-Z. The belief is that job control is set up before startup
-  files are read, but this needs testing in a real tmux window under both
-  shells before anything else depends on it.
+  Ctrl-C and Ctrl-Z. Expectation: Ctrl-C works (the foreground process group
+  is set before startup files run); Ctrl-Z is the uncertain one. This is an
+  acceptance check, not a blocker — see Decisions.
 
-## Open questions
+## Decisions
 
-- Language: a shell script (no install beyond copying it onto `PATH`) or a
-  compiled binary (like `wtclaude`, via `cargo install`).
-- Whether `wtclaude` should someday print or record the session id it just
-  ran, so a caller can pass the exact `--resume <id>` to `--history` instead
-  of a `SESSION_ID` placeholder. That work belongs in `wtclaude`, not here.
+- **Language: Rust**, installed with `cargo install`, for consistency with
+  `wtclaude`. The binary writes the per-shell startup file to a temporary
+  location and `exec`s the shell.
+- **COMMAND runs at the end of the generated startup file.** If Ctrl-Z (or
+  anything else) misbehaves in real use, switch to a run-once first-prompt hook
+  (bash `PROMPT_COMMAND`, zsh `precmd`), which runs after startup completes.
+  Keep the generator structured so that switch is small.
+  - Outcome: under bash, Ctrl-Z did nothing when COMMAND ran from the rcfile,
+    so bash now runs COMMAND from a run-once `PROMPT_COMMAND` hook (restoring
+    the user's own `PROMPT_COMMAND`). zsh still runs COMMAND at the end of
+    `.zshrc`, where Ctrl-Z works.
+- **Tests:** pseudo-terminal integration tests (e.g. the `rexpect` crate) under
+  bash and zsh covering history order (COMMAND first on up-arrow, then the
+  `--history` entries) and landing at a prompt after both a succeeding and a
+  failing COMMAND. Ctrl-C / Ctrl-Z in a real tmux window are a manual checklist
+  in the PR description.
+
+## Out of scope
+
+- `wtclaude` printing or recording the session id it ran, so callers can pass
+  an exact `--resume <id>`. That work belongs in `wtclaude`.
+
+## Grill Log
+
+### 2026-10-23
+
+- Q: Shell script or compiled binary? — A: Rust binary (`cargo install`), for
+  consistency with `wtclaude`'s ecosystem. A POSIX `sh` script was considered
+  and rejected despite being simpler to install.
+- Q: Spike job control (Ctrl-C/Ctrl-Z from a startup file) before building, or
+  treat it as an acceptance check? — A: Acceptance check. Run COMMAND from the
+  startup file; fall back to a first-prompt hook if it turns out badly, and
+  iterate. Automated pty tests for history order and post-exit prompt; manual
+  tmux checklist for Ctrl-C/Ctrl-Z.
