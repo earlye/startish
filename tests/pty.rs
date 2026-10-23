@@ -50,7 +50,7 @@ impl Shell {
                 write(".bash_history", "echo OLD-$((5+5))\n");
             }
             Shell::Zsh => {
-                write(".zshenv", "ZDOTDIR=$HOME/zdot\n");
+                write(".zshenv", "ZDOTDIR=$HOME/zdot\nskip_global_compinit=1\n");
                 write(
                     "zdot/.zshrc",
                     &format!(
