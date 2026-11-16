@@ -3,6 +3,7 @@ name = "startish"
 version = "0.1.0"
 edition = "2024"
 description = "Run a command, then leave an interactive shell with it in history"
+license = "MIT"
 
 [dependencies]
 libc = "0.2.191"
